@@ -394,8 +394,8 @@ else:
         pass
     if platform.is_mingw():
         cflags += ['-DWINVER=0x0501', '-D_WIN32_WINNT=0x0501',
-                   '_USING_V110_SDK71_', '_ATL_XP_TARGETING',
-                   'PSAPI_VERSION=1', '-D__USE_MINGW_ANSI_STDIO=1']
+                   '-D_USING_V110_SDK71_', '-D_ATL_XP_TARGETING',
+                   '-DPSAPI_VERSION=1', '-D__USE_MINGW_ANSI_STDIO=1']
     ldflags = ['-L$builddir']
     if platform.uses_usr_local():
         cflags.append('-I/usr/local/include')
