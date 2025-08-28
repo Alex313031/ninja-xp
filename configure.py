@@ -370,8 +370,6 @@ else:
               '-mfpmath=sse',
               '-msse2',
               '-msse3',
-              '-msse4.1',
-              '-msse4.2',
               '-ffast-math',
               '-ffp-contract=fast',
               '-fvisibility=hidden', '-pipe',
