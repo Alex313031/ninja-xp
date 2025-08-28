@@ -812,6 +812,7 @@ int ParseCPUFromCGroup() {
 #endif
 
 int GetProcessorCount() {
+#if _WIN32_WINNT >= 0x0601
 #ifdef _WIN32
   DWORD cpuCount = 0;
 #ifndef _WIN64
@@ -883,6 +884,10 @@ int GetProcessorCount() {
   if (cgroupCount < 0 && schedCount < 0)
     return static_cast<int>(sysconf(_SC_NPROCESSORS_ONLN));
   return std::max(cgroupCount, schedCount);
+#endif
+#else
+  // Cap at 4 for Windows XP/Vista
+  return 4;
 #endif
 }
 

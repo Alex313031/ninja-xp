@@ -366,7 +366,14 @@ else:
               '-Wno-unused-parameter',
               '-fno-rtti',
               '-fno-exceptions',
-              '-std=c++14',
+              '-std=c++17',
+              '-mfpmath=sse',
+              '-msse2',
+              '-msse3',
+              '-msse4.1',
+              '-msse4.2',
+              '-ffast-math',
+              '-ffp-contract=fast',
               '-fvisibility=hidden', '-pipe',
               '-DNINJA_PYTHON="%s"' % options.with_python]
     if options.warnings_as_errors:
@@ -375,7 +382,7 @@ else:
         cflags += ['-D_GLIBCXX_DEBUG', '-D_GLIBCXX_DEBUG_PEDANTIC']
         cflags.remove('-fno-rtti')  # Needed for above pedanticness.
     else:
-        cflags += ['-O2', '-DNDEBUG']
+        cflags += ['-O3', '-DNDEBUG']
     try:
         proc = subprocess.Popen(
             [CXX, '-fdiagnostics-color', '-c', '-x', 'c++', '/dev/null',
@@ -386,7 +393,9 @@ else:
     except:
         pass
     if platform.is_mingw():
-        cflags += ['-D_WIN32_WINNT=0x0601', '-D__USE_MINGW_ANSI_STDIO=1']
+        cflags += ['-DWINVER=0x0501', '-D_WIN32_WINNT=0x0501',
+                   '_USING_V110_SDK71_', '_ATL_XP_TARGETING',
+                   'PSAPI_VERSION=1', '-D__USE_MINGW_ANSI_STDIO=1']
     ldflags = ['-L$builddir']
     if platform.uses_usr_local():
         cflags.append('-I/usr/local/include')
