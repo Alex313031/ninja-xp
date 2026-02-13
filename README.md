@@ -1,6 +1,8 @@
 # Ninja
 
-Ninja is a small build system with a focus on speed.
+__NOTE:__ This is a fork with compiler optimizations like -O3 -ffast-math and SSE4, and support for Windows XP/Vista was re-added.
+
+Ninja-xp is a small, configurable build system with a focus on speed and scalability.
 https://ninja-build.org/
 
 See [the manual](https://ninja-build.org/manual.html) or
