@@ -93,16 +93,20 @@ build_linux() {
 }
 
 build_windows() {
-  # Cross-compile for Windows using the mingw-w64 toolchain (installed via --deps).
-  # gen.py defaults the mingw toolchain to plain g++/ar, which is the host
-  # compiler, so we must point it at the cross compiler explicitly.
-  export CC=x86_64-w64-mingw32-gcc
-  export CXX=x86_64-w64-mingw32-g++
-  export AR=x86_64-w64-mingw32-ar
-  export LD=x86_64-w64-mingw32-g++
+  export CC=gcc
+  export CXX=g++
+  export AR=ar
+  export LD=g++
   if [ "$WANT_DEBUG" == "1" ]; then
     python3 configure.py --bootstrap --host=linux --platform=linux --debug --verbose &&
     mv -fv ninja ninja_bootstrap &&
+    # Cross-compile for Windows using the mingw-w64 toolchain (installed via --deps).
+    # gen.py defaults the mingw toolchain to plain g++/ar, which is the host
+    # compiler, so we must point it at the cross compiler explicitly.
+    export CC=x86_64-w64-mingw32-gcc
+    export CXX=x86_64-w64-mingw32-g++
+    export AR=x86_64-w64-mingw32-ar
+    export LD=x86_64-w64-mingw32-g++
     python3 configure.py --host=linux --platform=mingw --debug --verbose &&
     ./ninja_bootstrap -j$JOB_COUNT &&
     mv -fv ninja.exe ninja_debug.exe &&
@@ -111,6 +115,10 @@ build_windows() {
   else
     python3 configure.py --bootstrap --host=linux --platform=linux --verbose &&
     mv -fv ninja ninja_bootstrap &&
+    export CC=x86_64-w64-mingw32-gcc
+    export CXX=x86_64-w64-mingw32-g++
+    export AR=x86_64-w64-mingw32-ar
+    export LD=x86_64-w64-mingw32-g++
     python3 configure.py --host=linux --platform=mingw --verbose &&
     ./ninja_bootstrap -j$JOB_COUNT &&
     zip "ninja_win.zip" ninja.exe &&
