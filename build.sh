@@ -107,7 +107,7 @@ build_linux() {
 
 clean_out() {
   printf "${YEL}Cleaning .zips...${c0}\n"
-  rm -rfv ${HERE}/ninja*.zip
+  rm -rfv ${HERE}/ninja_*.zip
 }
 
 build_windows() {
