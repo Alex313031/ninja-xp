@@ -48,3 +48,6 @@
 # Visual Studio files
 /.vs/
 /out/
+
+/ninja_bootstrap*
+/*.zip
