@@ -16,7 +16,7 @@ die()  { yell "${RED}$* ${c0}"; exit 1; }
 try() { "$@" || die "${RED}Failed $*"; }
 
 SCRIPTNAME=$(basename "$0")
-SCRIPTVER="1.0.0"
+SCRIPTVER="2.0.1"
 
 export HERE=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
@@ -24,6 +24,7 @@ JOB_COUNT=$(getconf _NPROCESSORS_ONLN)
 
 WANT_DEBUG=0
 WANT_TARGET=""
+VFLAG=""
 
 show_help() {
   cat <<EOF
@@ -33,12 +34,14 @@ Usage:
 A script to build Ninja on Linux for Linux or Windows.
 
 Options:
-  -h, --help  Show this help.
-  --version   Show script version.
-  --deps      Install build dependencies
-  -l, --linux Build GN for Linux
-  -w, --win   Build GN for Windows
-  -d, --debug Make a debug build
+  -h, --help    Show this help.
+  --version     Show script version.
+  -c, --clean   Remove build artifacts
+  --deps        Install build dependencies
+  -l, --linux   Build GN for Linux
+  -w, --win     Build GN for Windows
+  -d, --debug   Make a debug build
+  -v, --verbose Verbose build output
 
 EOF
 
@@ -75,21 +78,36 @@ build_linux() {
   export AR=ar
   export LD=g++
   if [ "$WANT_DEBUG" == "1" ]; then
-    python3 configure.py --bootstrap --host=linux --platform=linux --debug --verbose &&
+    printf "${GRE}Building Ninja for Linux using GCC (Debug)...${c0}\n"
+    printf "${CYA}Making bootstrap build...${c0}\n"
+    python3 configure.py --bootstrap --host=linux --platform=linux --debug $VFLAG &&
     mv -fv ninja ninja_bootstrap &&
-    python3 configure.py --host=linux --platform=linux --debug --verbose &&
+    printf "${CYA}Making final build...${c0}\n"
+    python3 configure.py --host=linux --platform=linux --debug $VFLAG &&
     ./ninja_bootstrap -j$JOB_COUNT &&
     mv -fv ninja ninja_debug &&
+    printf "${GRE}Zipping up build.${c0}\n"
     zip "ninja_debug.zip" ninja_debug
-    rm -fv ./ninja_bootstrap
+    rm -fv ./ninja_bootstrap &&
+    printf "${GRE}Done!${c0}\n"
   else
-    python3 configure.py --bootstrap --host=linux --platform=linux --verbose &&
+    printf "${GRE}Building Ninja for Linux using GCC...${c0}\n"
+    printf "${CYA}Making bootstrap build...${c0}\n"
+    python3 configure.py --bootstrap --host=linux --platform=linux $VFLAG &&
     mv -fv ninja ninja_bootstrap &&
-    python3 configure.py --host=linux --platform=linux --verbose &&
+    printf "${CYA}Making final build...${c0}\n"
+    python3 configure.py --host=linux --platform=linux $VFLAG &&
     ./ninja_bootstrap -j$JOB_COUNT &&
+    printf "${GRE}Zipping up build.${c0}\n"
     zip "ninja_linux.zip" ninja
-    rm -fv ./ninja_bootstrap
+    rm -fv ./ninja_bootstrap &&
+    printf "${GRE}Done!${c0}\n"
   fi
+}
+
+clean_out() {
+  printf "${YEL}Cleaning .zips...${c0}\n"
+  rm -rfv ${HERE}/ninja*.zip
 }
 
 build_windows() {
@@ -98,8 +116,11 @@ build_windows() {
   export AR=ar
   export LD=g++
   if [ "$WANT_DEBUG" == "1" ]; then
-    python3 configure.py --bootstrap --host=linux --platform=linux --debug --verbose &&
+    printf "${GRE}Building Ninja for Windows using MinGW (Debug)...${c0}\n"
+    printf "${CYA}Making bootstrap Linux build...${c0}\n"
+    python3 configure.py --bootstrap --host=linux --platform=linux --debug $VFLAG &&
     mv -fv ninja ninja_bootstrap &&
+    printf "${CYA}Making final build...${c0}\n"
     # Cross-compile for Windows using the mingw-w64 toolchain (installed via --deps).
     # gen.py defaults the mingw toolchain to plain g++/ar, which is the host
     # compiler, so we must point it at the cross compiler explicitly.
@@ -107,22 +128,29 @@ build_windows() {
     export CXX=x86_64-w64-mingw32-g++
     export AR=x86_64-w64-mingw32-ar
     export LD=x86_64-w64-mingw32-g++
-    python3 configure.py --host=linux --platform=mingw --debug --verbose &&
+    python3 configure.py --host=linux --platform=mingw --debug $VFLAG &&
     ./ninja_bootstrap -j$JOB_COUNT &&
     mv -fv ninja.exe ninja_debug.exe &&
+    printf "${GRE}Zipping up build.${c0}\n"
     zip "ninja_win_debug.zip" ninja_debug.exe
-    rm -fv ./ninja_bootstrap
+    rm -fv ./ninja_bootstrap &&
+    printf "${GRE}Done!${c0}\n"
   else
-    python3 configure.py --bootstrap --host=linux --platform=linux --verbose &&
+    printf "${GRE}Building Ninja for Windows using MinGW...${c0}\n"
+    printf "${CYA}Making bootstrap Linux build...${c0}\n"
+    python3 configure.py --bootstrap --host=linux --platform=linux $VFLAG &&
     mv -fv ninja ninja_bootstrap &&
+    printf "${CYA}Making final build...${c0}\n"
     export CC=x86_64-w64-mingw32-gcc
     export CXX=x86_64-w64-mingw32-g++
     export AR=x86_64-w64-mingw32-ar
     export LD=x86_64-w64-mingw32-g++
-    python3 configure.py --host=linux --platform=mingw --verbose &&
+    python3 configure.py --host=linux --platform=mingw $VFLAG &&
     ./ninja_bootstrap -j$JOB_COUNT &&
-    zip "ninja_win.zip" ninja.exe &&
-    rm -fv ./ninja_bootstrap
+    printf "${GRE}Zipping up build.${c0}\n"
+    zip "ninja_win.zip" ninja.exe
+    rm -fv ./ninja_bootstrap &&
+    printf "${GRE}Done!${c0}\n"
   fi
 }
 
@@ -136,6 +164,13 @@ while :; do
         ;;
     --deps)
         install_deps
+        exit 0
+        ;;
+    -v|--verbose)
+        VFLAG="--verbose"
+        ;;
+    -c|--clean)
+        clean_out
         exit 0
         ;;
     -d|--debug)
