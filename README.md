@@ -1,8 +1,8 @@
-# Ninja
+# Ninja XP
 
-__NOTE:__ This is a fork with compiler optimizations like -O3 -ffast-math and SSE4, and support for Windows XP/Vista was re-added.
+__This is a fork with restored support for Windows XP/Vista (Upstream Ninja only runs on Win7+).__
 
-Ninja-xp is a small, configurable build system with a focus on speed and scalability.
+Ninja is a small, configurable build system with a focus on speed and scalability.
 https://ninja-build.org/
 
 See [the manual](https://ninja-build.org/manual.html) or
