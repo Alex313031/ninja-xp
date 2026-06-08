@@ -811,9 +811,15 @@ int ParseCPUFromCGroup() {
 }
 #endif
 
+static const DWORD GetLogicalProcessorCount() {
+  SYSTEM_INFO si = {};
+  GetNativeSystemInfo(&si);
+  return (si.dwNumberOfProcessors > 0) ? si.dwNumberOfProcessors : 1;
+}
+
 int GetProcessorCount() {
-#if _WIN32_WINNT >= 0x0601
 #ifdef _WIN32
+#if _WIN32_WINNT >= 0x0601
   DWORD cpuCount = 0;
 #ifndef _WIN64
   // Need to use GetLogicalProcessorInformationEx to get real core count on
@@ -843,7 +849,7 @@ int GetProcessorCount() {
       }
     }
   }
-#endif
+#endif // !_WIN64
   if (cpuCount == 0) {
     cpuCount = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
   }
@@ -858,6 +864,10 @@ int GetProcessorCount() {
     }
   }
   return cpuCount;
+#else
+  // Older WinXP compatible function.
+  return static_cast<int>(GetLogicalProcessorCount());
+#endif
 #else
   int cgroupCount = -1;
   int schedCount = -1;
@@ -884,10 +894,6 @@ int GetProcessorCount() {
   if (cgroupCount < 0 && schedCount < 0)
     return static_cast<int>(sysconf(_SC_NPROCESSORS_ONLN));
   return std::max(cgroupCount, schedCount);
-#endif
-#else
-  // Cap at 4 for Windows XP/Vista
-  return 4;
 #endif
 }
 
