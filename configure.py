@@ -369,9 +369,6 @@ else:
               '-std=c++17',
               '-mfpmath=sse',
               '-msse2',
-              '-msse3',
-              '-ffast-math',
-              '-ffp-contract=fast',
               '-fvisibility=hidden', '-pipe',
               '-DNINJA_PYTHON="%s"' % options.with_python]
     if options.warnings_as_errors:
