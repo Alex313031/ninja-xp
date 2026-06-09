@@ -350,6 +350,14 @@ if platform.is_msvc():
               '/wd4267',
               '/DNOMINMAX', '/D_CRT_SECURE_NO_WARNINGS',
               '/D_HAS_EXCEPTIONS=0',
+              '/DWINVER=0x0501',
+              '/D_WIN32_WINNT=0x0501',
+              '/DPSAPI_VERSION=1',
+              '/D_USING_V110_SDK71_',
+              '/D_ATL_XP_TARGETING',
+              '/ARCH:SSE2',
+              '/DUNICODE',
+              '/D_UNICODE',
               '/DNINJA_PYTHON="%s"' % options.with_python]
     if options.warnings_as_errors:
         cflags.append('/WX')
@@ -357,7 +365,7 @@ if platform.is_msvc():
         cflags.append('/FS')
     ldflags = ['/DEBUG', '/libpath:$builddir']
     if not options.debug:
-        cflags += ['/Ox', '/DNDEBUG', '/GL']
+        cflags += ['/O2', '/DNDEBUG', '/GL']
         ldflags += ['/LTCG', '/OPT:REF', '/OPT:ICF']
 else:
     cflags = ['-g', '-Wall', '-Wextra',
@@ -388,7 +396,7 @@ else:
     except:
         pass
     if platform.is_mingw():
-        cflags += ['-DWINVER=0x0501', '-D_WIN32_WINNT=0x0501',
+        cflags += ['-DUNICODE', '-D_UNICODE', '-DWINVER=0x0501', '-D_WIN32_WINNT=0x0501',
                    '-D_USING_V110_SDK71_', '-D_ATL_XP_TARGETING',
                    '-DPSAPI_VERSION=1', '-D__USE_MINGW_ANSI_STDIO=1']
     ldflags = ['-L$builddir']
