@@ -20,7 +20,7 @@ die()  { yell "${RED}$* ${c0}"; exit 1; }
 try() { "$@" || die "${RED}Failed $*"; }
 
 SCRIPTNAME=$(basename "$0")
-SCRIPTVER="2.1.3"
+SCRIPTVER="2.1.4"
 
 export HERE=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
@@ -47,7 +47,7 @@ Options:
   --version     Show script version.
   -c, --clean   Remove build artifacts
   --deps        Install build dependencies
-  --i386        Make a 32 bit build (only applicable to Windows builds)
+  --i386        Make a 32 bit build (i386 on Linux, win32 on Windows)
   -l, --linux   Build Ninja for Linux
   -w, --win     Build Ninja for Windows
   -d, --debug   Make a debug build
@@ -73,10 +73,11 @@ install_deps() {
   if [ "$(id -u)" -ne 0 ]; then sudo="sudo"; fi
 
   printf "${GRE}Installing dependencies for %s...${c0}\n" "$SCRIPTNAME"
-  # build-essential: gcc, g++, make for the Linux build. mingw-w64 provides the
-  # x86_64-w64-mingw32-* cross toolchain used by the Windows build.
+  # build-essential: gcc, g++, make for the Linux build; g++-multilib adds the
+  # 32-bit libs needed for --i386 Linux builds. mingw-w64 provides the
+  # *-w64-mingw32-* cross toolchains used by the Windows builds.
   $sudo apt-get update || die "apt-get update failed"
-  $sudo apt-get install build-essential python3 re2c zip \
+  $sudo apt-get install build-essential g++-multilib python3 re2c zip \
         mingw-w64 mingw-w64-i686-dev mingw-w64-x86-64-dev mingw-w64-tools \
       || die "Failed to install dependencies"
   printf "${GRE}Done installing dependencies!${c0}\n"
@@ -88,13 +89,23 @@ build_linux() {
   export CXX=g++
   export AR=ar
   export LD=g++
-  local zipname="ninja_linux"
+  # 32- vs 64-bit Linux. The bootstrap ninja is built host-native (it runs on the
+  # build host to drive the final build); only the FINAL ninja gets the arch flag,
+  # via configure.py's CFLAGS/CXXFLAGS (which it routes into both compile and link).
+  # So a 64-bit host needs only g++-multilib's 32-bit libs, not a 32-bit runtime.
+  local arch="" mflag="-m64"
+  if [ "$WANT_I386" == "1" ]; then
+    arch="_i386"
+    mflag="-m32"
+  fi
+  local zipname="ninja_linux${arch}"
   if [ "$WANT_DEBUG" == "1" ]; then
     printf "${GRE}Building Ninja for Linux using GCC (Debug)...${c0}\n"
     printf "${CYA}Making bootstrap build...${c0}\n"
     try python3 configure.py --bootstrap --host=linux --platform=linux --debug $VFLAG
     try mv -fv ninja ninja_bootstrap
     printf "${CYA}Making final build...${c0}\n"
+    export CFLAGS="$mflag" CXXFLAGS="$mflag" LDFLAGS="$mflag"
     try python3 configure.py --host=linux --platform=linux --debug $VFLAG
     try ./ninja_bootstrap -j"$JOB_COUNT"
     try mv -fv ninja ninja_debug
@@ -108,6 +119,7 @@ build_linux() {
     try python3 configure.py --bootstrap --host=linux --platform=linux $VFLAG
     try mv -fv ninja ninja_bootstrap
     printf "${CYA}Making final build...${c0}\n"
+    export CFLAGS="$mflag" CXXFLAGS="$mflag" LDFLAGS="$mflag"
     try python3 configure.py --host=linux --platform=linux $VFLAG
     try ./ninja_bootstrap -j"$JOB_COUNT"
     printf "${GRE}Zipping up ninja... ${c0}\n"
@@ -217,9 +229,6 @@ while :; do
   esac
   shift
 done
-
-[ "$WANT_I386" == "1" ] && [ "$WANT_TARGET" == "linux" ] && \
-  die "--i386 only applies to Windows builds (-w/--win)"
 
 case "$WANT_TARGET" in
   linux)
