@@ -126,29 +126,29 @@ clean_out() {
 }
 
 build_windows() {
-  local zipname=""
-  # Cross-compile for Windows using the mingw-w64 toolchain (installed via --deps).
-  # configure.py defaults the mingw toolchain to plain g++/ar, which is the host
-  # compiler, so we must point it at the cross compiler explicitly.
+  local zipname="" cross=""
+  # Pick the cross toolchain prefix and artifact name by target arch. The
+  # bootstrap ninja built below is a *native Linux* binary (it compiles POSIX
+  # code like browse.cc's fork/pipe), so it MUST use the host g++ -- only the
+  # final mingw build uses $cross.
   if [ "$WANT_I386" == "1" ]; then
-    export CC=i686-w64-mingw32-gcc
-    export CXX=i686-w64-mingw32-g++
-    export AR=i686-w64-mingw32-ar
-    export LD=i686-w64-mingw32-g++
+    cross="i686-w64-mingw32"
     zipname="ninja_win32"
   else
-    export CC=x86_64-w64-mingw32-gcc
-    export CXX=x86_64-w64-mingw32-g++
-    export AR=x86_64-w64-mingw32-ar
-    export LD=x86_64-w64-mingw32-g++
+    cross="x86_64-w64-mingw32"
     zipname="ninja_win64"
   fi
+  # Host toolchain for the bootstrap build.
+  export CC=gcc CXX=g++ AR=ar LD=g++
   if [ "$WANT_DEBUG" == "1" ]; then
     printf "${GRE}Building Ninja for Windows using MinGW (Debug)...${c0}\n"
     printf "${CYA}Making bootstrap Linux build...${c0}\n"
     try python3 configure.py --bootstrap --host=linux --platform=linux --debug $VFLAG
     try mv -fv ninja ninja_bootstrap
     printf "${CYA}Making final build...${c0}\n"
+    # Cross-compile for Windows. configure.py defaults the mingw toolchain to
+    # plain g++/ar (the host compiler), so point it at the cross compiler.
+    export CC="$cross-gcc" CXX="$cross-g++" AR="$cross-ar" LD="$cross-g++"
     try python3 configure.py --host=linux --platform=mingw --debug $VFLAG
     try ./ninja_bootstrap -j"$JOB_COUNT"
     try mv -fv ninja.exe ninja_debug.exe
@@ -162,6 +162,7 @@ build_windows() {
     try python3 configure.py --bootstrap --host=linux --platform=linux $VFLAG
     try mv -fv ninja ninja_bootstrap
     printf "${CYA}Making final build...${c0}\n"
+    export CC="$cross-gcc" CXX="$cross-g++" AR="$cross-ar" LD="$cross-g++"
     try python3 configure.py --host=linux --platform=mingw $VFLAG
     try ./ninja_bootstrap -j"$JOB_COUNT"
     printf "${GRE}Zipping up ninja.exe... ${c0}\n"
