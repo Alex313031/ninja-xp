@@ -1,6 +1,7 @@
 # Ninja XP
 
-__This is a fork with restored support for Windows XP/Vista (Upstream Ninja only runs on Win7+).__
+__This is a fork with restored support for Windows XP/Vista (Upstream Ninja only runs on Win7+).__  
+It is used by [gn-legacy](https://github.com/Alex313031/gn-legacy#readme).
 
 Ninja is a small, configurable build system with a focus on speed and scalability.
 https://ninja-build.org/
