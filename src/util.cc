@@ -861,10 +861,10 @@ int GetProcessorCount() {
 #else
   // Older WinXP-compatible path. GetNativeSystemInfo is available since XP and
   // avoids the Win7+ processor-group APIs used above.
-  SYSTEM_INFO si = {};
-  GetNativeSystemInfo(&si);
-  return (si.dwNumberOfProcessors > 0) ? static_cast<int>(si.dwNumberOfProcessors)
-                                       : 1;
+  SYSTEM_INFO system_info = {};
+  ::GetNativeSystemInfo(&system_info);
+  return (system_info.dwNumberOfProcessors > 0) ? static_cast<int>(system_info.dwNumberOfProcessors)
+                                                : 1;
 #endif
 #else
   int cgroupCount = -1;
