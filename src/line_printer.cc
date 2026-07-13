@@ -80,6 +80,12 @@ void LinePrinter::Print(string to_print, LineType type) {
   if (smart_terminal_ && type == ELIDE) {
 #ifdef _WIN32
     CONSOLE_SCREEN_BUFFER_INFO csbi;
+    // The status is drawn below with WriteConsoleOutput -- a direct console write
+    // that bypasses stdout's buffer. Flush stdout first (the \r above, plus any
+    // ninja message or build output still buffered) so the cursor position we read
+    // is current; otherwise an unflushed line races with the direct write and gets
+    // garbled on the legacy console (see the Info() note in util.cc).
+    fflush(stdout);
     GetConsoleScreenBufferInfo(console_, &csbi);
 
     ElideMiddleInPlace(to_print, static_cast<size_t>(csbi.dwSize.X));

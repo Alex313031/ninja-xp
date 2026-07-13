@@ -86,6 +86,7 @@ void Warning(const char* msg, va_list ap) {
   fprintf(stderr, "ninja: warning: ");
   vfprintf(stderr, msg, ap);
   fprintf(stderr, "\n");
+  fflush(stdout);  // keep any buffered stdout ordered ahead of this message
 }
 
 void Warning(const char* msg, ...) {
@@ -99,6 +100,7 @@ void Error(const char* msg, va_list ap) {
   fprintf(stderr, "ninja: error: ");
   vfprintf(stderr, msg, ap);
   fprintf(stderr, "\n");
+  fflush(stdout);  // keep any buffered stdout ordered ahead of this message
 }
 
 void Error(const char* msg, ...) {
@@ -112,6 +114,11 @@ void Info(const char* msg, va_list ap) {
   fprintf(stdout, "ninja: ");
   vfprintf(stdout, msg, ap);
   fprintf(stdout, "\n");
+  // Flush now: on the legacy-Windows console the status line is drawn with
+  // WriteConsoleOutput (a direct console write that bypasses stdout's buffer),
+  // so an unflushed message here races with it and gets garbled -- e.g.
+  // "ninja: Entering directory `out\test'" mangled by the first build line.
+  fflush(stdout);
 }
 
 void Info(const char* msg, ...) {
