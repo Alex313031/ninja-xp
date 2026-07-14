@@ -20,7 +20,7 @@ die()  { yell "${RED}$* ${c0}"; exit 1; }
 try() { "$@" || die "${RED}Failed $*"; }
 
 SCRIPTNAME=$(basename "$0")
-SCRIPTVER="2.1.4"
+SCRIPTVER="2.1.5"
 
 export HERE=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
@@ -93,14 +93,15 @@ build_linux() {
   # build host to drive the final build); only the FINAL ninja gets the arch flag,
   # via configure.py's CFLAGS/CXXFLAGS (which it routes into both compile and link).
   # So a 64-bit host needs only g++-multilib's 32-bit libs, not a 32-bit runtime.
-  local arch="" mflag="-m64"
+  local arch="" mflag="-m64" arch_label="x64"
   if [ "$WANT_I386" == "1" ]; then
     arch="_i386"
     mflag="-m32"
+    arch_label="x86"
   fi
   local zipname="ninja_linux${arch}"
   if [ "$WANT_DEBUG" == "1" ]; then
-    printf "${GRE}Building Ninja for Linux using GCC (Debug)...${c0}\n"
+    printf "${GRE}Building Ninja for Linux ${arch_label} using GCC (Debug)...${c0}\n"
     printf "${CYA}Making bootstrap build...${c0}\n"
     try python3 configure.py --bootstrap --host=linux --platform=linux --debug $VFLAG
     try mv -fv ninja ninja_bootstrap
@@ -114,7 +115,7 @@ build_linux() {
     try zip "$zipname.zip" ninja_debug
     rm -fv ./ninja_bootstrap
   else
-    printf "${GRE}Building Ninja for Linux using GCC...${c0}\n"
+    printf "${GRE}Building Ninja for Linux ${arch_label} using GCC...${c0}\n"
     printf "${CYA}Making bootstrap build...${c0}\n"
     try python3 configure.py --bootstrap --host=linux --platform=linux $VFLAG
     try mv -fv ninja ninja_bootstrap
@@ -138,7 +139,7 @@ clean_out() {
 }
 
 build_windows() {
-  local zipname="" cross=""
+  local zipname="" cross="" arch_label=""
   # Pick the cross toolchain prefix and artifact name by target arch. The
   # bootstrap ninja built below is a *native Linux* binary (it compiles POSIX
   # code like browse.cc's fork/pipe), so it MUST use the host g++ -- only the
@@ -146,14 +147,16 @@ build_windows() {
   if [ "$WANT_I386" == "1" ]; then
     cross="i686-w64-mingw32"
     zipname="ninja_win32"
+    arch_label="x86"
   else
     cross="x86_64-w64-mingw32"
     zipname="ninja_win64"
+    arch_label="x64"
   fi
   # Host toolchain for the bootstrap build.
   export CC=gcc CXX=g++ AR=ar LD=g++
   if [ "$WANT_DEBUG" == "1" ]; then
-    printf "${GRE}Building Ninja for Windows using MinGW (Debug)...${c0}\n"
+    printf "${GRE}Building Ninja for Windows ${arch_label} using MinGW (Debug)...${c0}\n"
     printf "${CYA}Making bootstrap Linux build...${c0}\n"
     try python3 configure.py --bootstrap --host=linux --platform=linux --debug $VFLAG
     try mv -fv ninja ninja_bootstrap
@@ -169,7 +172,7 @@ build_windows() {
     try zip "$zipname.zip" ninja_debug.exe
     rm -fv ./ninja_bootstrap
   else
-    printf "${GRE}Building Ninja for Windows using MinGW...${c0}\n"
+    printf "${GRE}Building Ninja for Windows ${arch_label} using MinGW...${c0}\n"
     printf "${CYA}Making bootstrap Linux build...${c0}\n"
     try python3 configure.py --bootstrap --host=linux --platform=linux $VFLAG
     try mv -fv ninja ninja_bootstrap
