@@ -1700,6 +1700,7 @@ int ReadFlags(int* argc, char*** argv,
   };
 
   int opt;
+  bool print_hello = true;
   while (!options->tool &&
          (opt = getopt_long(*argc, *argv, "d:f:j:k:l:nt:vw:C:h", kLongOptions,
                             NULL)) != -1) {
@@ -1760,6 +1761,7 @@ int ReadFlags(int* argc, char*** argv,
         break;
       case OPT_QUIET:
         config->verbosity = BuildConfig::NO_STATUS_UPDATE;
+        print_hello = false;
         break;
       case 'w':
         if (!WarningEnable(optarg, options))
@@ -1769,7 +1771,7 @@ int ReadFlags(int* argc, char*** argv,
         options->working_dir = optarg;
         break;
       case OPT_VERSION: {
-        printf("%s\n", kNinjaVersion);
+        printf("%s %s\n", kNinjaProductName, kNinjaVersion);
         // On Windows, also report the host OS version (empty elsewhere).
         string os_version = OperatingSystemVersion();
         if (!os_version.empty())
@@ -1786,6 +1788,11 @@ int ReadFlags(int* argc, char*** argv,
   *argv += optind;
   *argc -= optind;
 
+  if (print_hello) {
+    // Hello banner on stderr so it never pollutes command stdout (e.g. the JSON
+    // from `ninja -t compdb`); --quiet suppresses it via print_hello above.
+    fprintf(stderr, "%s\n", kNinjaProductName);
+  }
   return -1;
 }
 

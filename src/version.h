@@ -67,6 +67,9 @@
 /// be "git" on trunk.
 extern const char* kNinjaVersion;
 
+// Brand name for Ninja
+extern const char* kNinjaProductName;
+
 /// Parse the major/minor components of a version string.
 void ParseVersion(const std::string& version, int* major, int* minor);
 
