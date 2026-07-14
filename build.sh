@@ -79,7 +79,7 @@ install_deps() {
   # 32-bit libs needed for --i386 Linux builds. mingw-w64 provides the
   # *-w64-mingw32-* cross toolchains used by the Windows builds.
   $sudo apt-get update || die "apt-get update failed"
-  $sudo apt-get install build-essential g++-multilib python3 re2c zip \
+  $sudo apt-get install build-essential g++-multilib python3 re2c zip unzip \
         mingw-w64 mingw-w64-i686-dev mingw-w64-x86-64-dev mingw-w64-tools \
       || die "Failed to install dependencies"
   printf "${GRE}Done installing dependencies!${c0}\n"

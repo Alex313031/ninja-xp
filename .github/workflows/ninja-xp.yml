@@ -15,6 +15,10 @@ concurrency:
 permissions:
   contents: read
 
+# Update MinGW version here
+env:
+  MINGW_BASE_URL: https://github.com/Alex313031/mingw-build/releases/download/20260609
+
 jobs:
   build:
     name: Build Ninja x86/x64
@@ -29,7 +33,23 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install build dependencies
-        run: ./build.sh --deps
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential g++-multilib python3 re2c wget zip unzip
+
+      - name: Download MinGW
+        # Use our own MinGW fork for compiling Windows builds
+        run: |
+          wget "${MINGW_BASE_URL}/mingw_gcc_linux_i686.zip"
+          wget "${MINGW_BASE_URL}/mingw_gcc_linux_x64.zip"
+          unzip -o mingw_gcc_linux_i686.zip -d "$HOME"
+          unzip -o mingw_gcc_linux_x64.zip -d "$HOME"
+          rm -f mingw_gcc_linux_i686.zip mingw_gcc_linux_x64.zip
+          # Fail fast if either cross-compiler can't run on this host.
+          "$HOME/i686/bin/i686-w64-mingw32-gcc" --version
+          "$HOME/x64/bin/x86_64-w64-mingw32-gcc" --version
+          echo "$HOME/x64/bin" >> "$GITHUB_PATH"
+          echo "$HOME/i686/bin" >> "$GITHUB_PATH"
 
       - name: Build for Linux/Windows
         # On pull_request the checkout HEAD is an ephemeral merge commit, so take
