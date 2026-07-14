@@ -1768,9 +1768,14 @@ int ReadFlags(int* argc, char*** argv,
       case 'C':
         options->working_dir = optarg;
         break;
-      case OPT_VERSION:
+      case OPT_VERSION: {
         printf("%s\n", kNinjaVersion);
+        // On Windows, also report the host OS version (empty elsewhere).
+        string os_version = OperatingSystemVersion();
+        if (!os_version.empty())
+          printf("Running on %s\n", os_version.c_str());
         return 0;
+      }
       case 'h':
       default:
         deferGuessParallelism.Refresh();

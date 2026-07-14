@@ -568,7 +568,127 @@ void Win32Fatal(const char* function, const char* hint) {
     Fatal("%s: %s", function, GetLastErrorString().c_str());
   }
 }
+
+namespace {
+
+// Reads the true NT version straight from ntdll, bypassing the app-compat
+// version that GetVersionExW reports to legacy-targeted binaries. Any out-param
+// may be null. Returns false if the version could not be determined.
+bool GetRawNtVersion(UINT* major, UINT* minor, UINT* build) {
+  HMODULE ntdll_lib = ::GetModuleHandleW(L"ntdll");
+  if (ntdll_lib == nullptr)
+    return false;
+
+  // Primary: RtlGetNtVersionNumbers (XP+, undocumented). Packs a build-type
+  // flag into the top 4 bits of the build number - mask them off so callers
+  // see the plain build (e.g. 2600 for XP SP3, 19045 for Win10 22H2).
+  typedef void(WINAPI RtlGetNtVersionNumbersFunc)(DWORD*, DWORD*, DWORD*);
+  auto* rtl_get_nt_version_numbers = FunctionCast<RtlGetNtVersionNumbersFunc*>(
+      ::GetProcAddress(ntdll_lib, "RtlGetNtVersionNumbers"));
+  if (rtl_get_nt_version_numbers != nullptr) {
+    DWORD major_ver = 0, minor_ver = 0, build_ver = 0;
+    rtl_get_nt_version_numbers(&major_ver, &minor_ver, &build_ver);
+    if (major_ver != 0) {
+      if (major)
+        *major = static_cast<UINT>(major_ver);
+      if (minor)
+        *minor = static_cast<UINT>(minor_ver);
+      if (build)
+        *build = static_cast<UINT>(build_ver & 0x0FFFFFFFu);
+      return true;
+    }
+  }
+
+  // Fallback: RtlGetVersion (documented, NT-native, not shimmed by
+  // application-compatibility manifests unlike GetVersionExW on Win8.1+).
+  typedef LONG(WINAPI RtlGetVersionFunc)(OSVERSIONINFOW*);
+  auto* rtl_get_version = FunctionCast<RtlGetVersionFunc*>(
+      ::GetProcAddress(ntdll_lib, "RtlGetVersion"));
+  if (rtl_get_version != nullptr) {
+    OSVERSIONINFOW version_info = {};
+    version_info.dwOSVersionInfoSize = sizeof(version_info);
+    if (rtl_get_version(&version_info) == 0 &&
+        version_info.dwMajorVersion != 0) {
+      if (major)
+        *major = static_cast<UINT>(version_info.dwMajorVersion);
+      if (minor)
+        *minor = static_cast<UINT>(version_info.dwMinorVersion);
+      if (build)
+        *build = static_cast<UINT>(version_info.dwBuildNumber);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// Marketing name for an NT major.minor(.build), or an empty string if the
+// version is not recognized. The build number distinguishes Windows 10 from 11
+// (both report NT 10.0; 11 starts at build 22000).
+string WindowsVersionName(UINT major, UINT minor, UINT build) {
+  switch (major) {
+    case 5:
+      switch (minor) {
+        case 0:
+          return "2000";
+        case 1:
+          return "XP";
+        case 2:
+          return "XP x64 / Server 2003";
+      }
+      break;
+    case 6:
+      switch (minor) {
+        case 0:
+          return "Vista";
+        case 1:
+          return "7";
+        case 2:
+          return "8";
+        case 3:
+          return "8.1";
+      }
+      break;
+    case 10:
+      if (minor == 0)
+        return build >= 22000u ? "11" : "10";
+      break;
+  }
+  return string();
+}
+
+}  // namespace
+#endif  // _WIN32
+
+bool IsLegacyWindows() {
+#ifdef _WIN32
+  UINT major = 0, minor = 0;
+  if (GetRawNtVersion(&major, &minor, nullptr)) {
+    // Anything older than Windows 7 (6.1) is considered legacy here.
+    return major < 6u || (major == 6u && minor == 0u);
+  }
+  return false;
+#else
+  return false;
 #endif
+}
+
+string OperatingSystemVersion() {
+#ifdef _WIN32
+  UINT major = 0, minor = 0, build = 0;
+  if (!GetRawNtVersion(&major, &minor, &build))
+    return string();
+  string version = "Windows ";
+  string name = WindowsVersionName(major, minor, build);
+  if (!name.empty())
+    version += name + " ";
+  version += "(" + to_string(major) + "." + to_string(minor) + "." +
+             to_string(build) + ")";
+  return version;
+#else
+  return string();
+#endif
+}
 
 bool islatinalpha(int c) {
   // isalpha() is locale-dependent.

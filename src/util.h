@@ -108,6 +108,15 @@ std::string GetWorkingDirectory();
 /// Truncates a file to the given size.
 bool Truncate(const std::string& path, size_t size, std::string* err);
 
+/// Returns true when running on a pre-Windows-7 host (2000/XP/Vista, i.e.
+/// NT < 6.1).  Always false on non-Windows platforms.
+bool IsLegacyWindows();
+
+/// Returns a human-readable host OS version string, e.g.
+/// "Windows XP (5.1.2600)".  Returns an empty string when the version is
+/// unavailable or on non-Windows platforms.
+std::string OperatingSystemVersion();
+
 #ifdef _MSC_VER
 #define snprintf _snprintf
 #define fileno _fileno
