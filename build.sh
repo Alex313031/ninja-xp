@@ -160,7 +160,7 @@ build_windows() {
     printf "${CYA}Making final build...${c0}\n"
     # Cross-compile for Windows. configure.py defaults the mingw toolchain to
     # plain g++/ar (the host compiler), so point it at the cross compiler.
-    export CC="$cross-gcc" CXX="$cross-g++" AR="$cross-ar" LD="$cross-g++"
+    export CC="$cross-gcc" CXX="$cross-g++" AR="$cross-ar" LD="$cross-g++" WINDRES="$cross-windres"
     try python3 configure.py --host=linux --platform=mingw --debug $VFLAG
     try ./ninja_bootstrap -j"$JOB_COUNT"
     try mv -fv ninja.exe ninja_debug.exe
@@ -174,7 +174,7 @@ build_windows() {
     try python3 configure.py --bootstrap --host=linux --platform=linux $VFLAG
     try mv -fv ninja ninja_bootstrap
     printf "${CYA}Making final build...${c0}\n"
-    export CC="$cross-gcc" CXX="$cross-g++" AR="$cross-ar" LD="$cross-g++"
+    export CC="$cross-gcc" CXX="$cross-g++" AR="$cross-ar" LD="$cross-g++" WINDRES="$cross-windres"
     try python3 configure.py --host=linux --platform=mingw $VFLAG
     try ./ninja_bootstrap -j"$JOB_COUNT"
     printf "${GRE}Zipping up ninja.exe... ${c0}\n"

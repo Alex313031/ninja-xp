@@ -273,7 +273,7 @@ configure_args = sys.argv[1:]
 if '--bootstrap' in configure_args:
     configure_args.remove('--bootstrap')
 n.variable('configure_args', ' '.join(configure_args))
-env_keys = set(['CXX', 'AR', 'CFLAGS', 'CXXFLAGS', 'LDFLAGS'])
+env_keys = set(['CXX', 'AR', 'WINDRES', 'CFLAGS', 'CXXFLAGS', 'LDFLAGS'])
 configure_env = dict((k, os.environ[k]) for k in os.environ if k in env_keys)
 if configure_env:
     config_str = ' '.join([k + '=' + shlex.quote(configure_env[k])
@@ -498,6 +498,23 @@ else:
         description='LINK $out')
 n.newline()
 
+# Windows resource compiler, used to embed windows/ninja.rc (version info).
+if platform.is_windows():
+    if platform.is_msvc():
+        n.rule('rc',
+            command='rc /nologo /fo$out $in',
+            description='RC $out')
+    else:
+        # MinGW: default to the toolchain-prefixed windres (e.g.
+        # x86_64-w64-mingw32-windres); build.sh exports $WINDRES for cross builds.
+        n.variable('windres', configure_env.get('WINDRES', 'windres'))
+        # -I windows lets windres find ninja.ico (referenced by ninja.rc's ICON
+        # entry) on its resource include path.
+        n.rule('rc',
+            command='$windres -I $root/windows -O coff -o $out $in',
+            description='RC $out')
+    n.newline()
+
 objs = []
 
 if platform.supports_ninja_browse():
@@ -610,6 +627,15 @@ all_targets = []
 
 n.comment('Main executable is library plus main() function.')
 objs = cxx('ninja', variables=cxxvariables)
+if platform.is_windows():
+    # Embed version information and the icon (windows/ninja.rc). MSVC produces a
+    # .res that link.exe consumes; MinGW's windres produces a COFF .o linked
+    # like any other object. Rebuild when the header or icon it pulls in change.
+    rc_out = built('ninja.res' if platform.is_msvc() else 'ninja_rc.o')
+    objs += n.build(rc_out, 'rc',
+                    os.path.join('$root', 'windows', 'ninja.rc'),
+                    implicit=[src('version.h'),
+                              os.path.join('$root', 'windows', 'ninja.ico')])
 ninja = n.build(binary('ninja'), 'link', objs, implicit=ninja_lib,
                 variables=[('libs', libs)])
 n.newline()

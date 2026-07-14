@@ -1,0 +1,57 @@
+// Copyright (c) 2026 Alex313031
+
+// Windows version-information resource for the Ninja XP executable.  Right
+// clicking ninja.exe -> Properties -> Details reads the strings below.  All of
+// the values come from src/version.h so there is a single source of truth
+// shared with the C++ build.
+
+#define APSTUDIO_READONLY_SYMBOLS
+
+#define APSTUDIO_HIDDEN_SYMBOLS
+#include <winver.h>
+#undef APSTUDIO_HIDDEN_SYMBOLS
+
+#include "../src/version.h"
+
+#undef APSTUDIO_READONLY_SYMBOLS
+
+// Embed icon
+101 ICON "ninja.ico"
+
+#ifdef _DEBUG
+#define NINJA_FILEFLAGS VS_FF_DEBUG
+#else
+#define NINJA_FILEFLAGS 0x0L
+#endif
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION    NINJA_VERSION_MAJOR,NINJA_VERSION_MINOR,NINJA_VERSION_PATCH,NINJA_VERSION_TWEAK
+ PRODUCTVERSION NINJA_VERSION_MAJOR,NINJA_VERSION_MINOR,NINJA_VERSION_PATCH,NINJA_VERSION_TWEAK
+ FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+ FILEFLAGS      NINJA_FILEFLAGS
+ FILEOS         VOS_NT_WINDOWS32
+ FILETYPE       VFT_APP
+ FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0" // 0x0409 = U.S. English, 0x04B0 = 1200 = Unicode.
+        BEGIN
+            VALUE "CompanyName",      RC_COMPANYNAME
+            VALUE "FileDescription",  RC_FILEDESCRIPTION
+            VALUE "FileVersion",      NINJA_VERSIONW
+            VALUE "InternalName",     RC_INTERNALNAME
+            VALUE "LegalCopyright",   RC_COPYRIGHT
+            VALUE "LegalTrademarks",  RC_TRADEMARKS
+            VALUE "OriginalFilename", L"ninja.exe"
+            VALUE "ProductName",      PRODUCT_NAME
+            VALUE "ProductVersion",   NINJA_VERSIONW
+            VALUE "Comments",         RC_COMMENTS
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        // Must match the language/codepage of the StringFileInfo block above.
+        VALUE "Translation", 0x409, 1200
+    END
+END

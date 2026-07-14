@@ -8,6 +8,12 @@ option(NINJA_FORCE_PSELECT "Use pselect() even on platforms that provide ppoll()
 
 project(ninja CXX)
 
+# Enable the resource compiler (rc.exe / windres) so the Windows binary can
+# embed windows/ninja.rc (version information).
+if(WIN32)
+	enable_language(RC)
+endif()
+
 # --- optional link-time optimization
 check_ipo_supported(RESULT lto_supported OUTPUT error)
 
@@ -211,7 +217,10 @@ if(NINJA_BUILD_BINARY)
 	target_link_libraries(ninja PRIVATE libninja libninja-re2c)
 
 	if(WIN32)
-		target_sources(ninja PRIVATE windows/ninja.manifest)
+		target_sources(ninja PRIVATE windows/ninja.manifest windows/ninja.rc)
+		# Let the resource compiler find ninja.ico (referenced by ninja.rc).
+		set_source_files_properties(windows/ninja.rc PROPERTIES
+			INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/windows")
 	endif()
 
 	option(NINJA_CLANG_TIDY "Run clang-tidy on source files" OFF)
