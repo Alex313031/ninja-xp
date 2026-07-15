@@ -17,7 +17,7 @@ permissions:
 
 # Update MinGW version here
 env:
-  MINGW_BASE_URL: https://github.com/Alex313031/mingw-build/releases/download/20260609
+  MINGW_BASE_URL: https://github.com/Alex313031/mingw-build/releases/download/20260715
 
 jobs:
   build:
