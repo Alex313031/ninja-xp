@@ -20,7 +20,7 @@ die()  { yell "${RED}$* ${c0}"; exit 1; }
 try() { "$@" || die "${RED}Failed $*"; }
 
 SCRIPTNAME=$(basename "$0")
-SCRIPTVER="2.1.6"
+SCRIPTVER="2.1.7"
 
 export HERE=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
@@ -32,6 +32,7 @@ JOB_COUNT=$(getconf _NPROCESSORS_ONLN)
 
 WANT_DEBUG=0
 WANT_I386=0
+WANT_ARM=0
 WANT_ALL=0
 WANT_TARGET=""
 VFLAG=""
@@ -49,9 +50,10 @@ Options:
   -c, --clean   Remove build artifacts
   --deps        Install build dependencies
   --i386        Make a 32 bit build (i386 on Linux, win32 on Windows)
+  --arm         Cross compile a 64 bit ARM build (arm64, Linux only)
   -l, --linux   Build Ninja for Linux
   -w, --win     Build Ninja for Windows
-  --all         Build all 4 combos: Linux x64/x86 and Windows x64/x86
+  --all         Build all 5 combos: Linux x64/x86/arm64 and Windows x64/x86
   -d, --debug   Make a debug build
   -v, --verbose Verbose build output
 
@@ -77,10 +79,12 @@ install_deps() {
   printf "${GRE}Installing dependencies for %s...${c0}\n" "$SCRIPTNAME"
   # build-essential: gcc, g++, make for the Linux build; g++-multilib adds the
   # 32-bit libs needed for --i386 Linux builds. mingw-w64 provides the
-  # *-w64-mingw32-* cross toolchains used by the Windows builds.
+  # *-w64-mingw32-* cross toolchains used by the Windows builds, and
+  # g++-aarch64-linux-gnu the aarch64 cross toolchain used by --arm builds.
   $sudo apt-get update || die "apt-get update failed"
   $sudo apt-get install build-essential g++-multilib python3 re2c zip unzip \
         mingw-w64 mingw-w64-i686-dev mingw-w64-x86-64-dev mingw-w64-tools \
+        g++-aarch64-linux-gnu \
       || die "Failed to install dependencies"
   printf "${GRE}Done installing dependencies!${c0}\n"
 }
@@ -91,16 +95,32 @@ build_linux() {
   export CXX=g++
   export AR=ar
   export LD=g++
-  # 32- vs 64-bit Linux. The bootstrap ninja is built host-native (it runs on the
-  # build host to drive the final build); only the FINAL ninja gets the arch flag,
-  # via configure.py's CFLAGS/CXXFLAGS (which it routes into both compile and link).
-  # So a 64-bit host needs only g++-multilib's 32-bit libs, not a 32-bit runtime.
-  local arch="" mflag="-m64" arch_label="x64"
+  # 32- vs 64-bit vs arm64 Linux. The bootstrap ninja is built host-native (it
+  # runs on the build host to drive the final build); only the FINAL ninja gets
+  # the arch flags, via set_final_env below. So a 64-bit host needs only
+  # g++-multilib's 32-bit libs (or the aarch64 cross toolchain), not a matching
+  # runtime.
+  local arch="" mflag="-m64" arch_label="x64" cross=""
   if [ "$WANT_I386" == "1" ]; then
     arch="_i386"
     mflag="-m32"
     arch_label="x86"
+  elif [ "$WANT_ARM" == "1" ]; then
+    arch="_arm64"
+    arch_label="arm64"
+    cross="aarch64-linux-gnu"
   fi
+  # Env for the FINAL build only. For arm64, point configure.py at the aarch64
+  # cross toolchain and swap its default x86 SSE2 SIMD flags for NEON via
+  # SIMD_FLAGS; aarch64 gcc rejects -m64/-m32, so no mflag is passed.
+  set_final_env() {
+    if [ -n "$cross" ]; then
+      export CC="$cross-gcc" CXX="$cross-g++" AR="$cross-ar" LD="$cross-g++"
+      export SIMD_FLAGS="-march=armv8-a+simd"
+    else
+      export CFLAGS="$mflag" CXXFLAGS="$mflag" LDFLAGS="$mflag"
+    fi
+  }
   local zipname="ninja_linux${arch}"
   if [ "$WANT_DEBUG" == "1" ]; then
     printf "${GRE}Building Ninja for Linux ${arch_label} using GCC (Debug)...${c0}\n"
@@ -108,7 +128,7 @@ build_linux() {
     try python3 configure.py --bootstrap --host=linux --platform=linux --debug $VFLAG
     try mv -fv ninja ninja_bootstrap
     printf "${CYA}Making final build...${c0}\n"
-    export CFLAGS="$mflag" CXXFLAGS="$mflag" LDFLAGS="$mflag"
+    set_final_env
     try python3 configure.py --host=linux --platform=linux --debug $VFLAG
     try ./ninja_bootstrap -j"$JOB_COUNT"
     try mv -fv ninja ninja_debug
@@ -122,7 +142,7 @@ build_linux() {
     try python3 configure.py --bootstrap --host=linux --platform=linux $VFLAG
     try mv -fv ninja ninja_bootstrap
     printf "${CYA}Making final build...${c0}\n"
-    export CFLAGS="$mflag" CXXFLAGS="$mflag" LDFLAGS="$mflag"
+    set_final_env
     try python3 configure.py --host=linux --platform=linux $VFLAG
     try ./ninja_bootstrap -j"$JOB_COUNT"
     printf "${GRE}Zipping up ninja... ${c0}\n"
@@ -189,16 +209,17 @@ build_windows() {
   printf "${GRE}Done! Zip at ${CYA}${zipname}.zip ${c0}\n"
 }
 
-# Build every OS/arch combo in one shot: Linux x64/x86 and Windows x64/x86.
-# Each build runs in a subshell so its per-build env exports (CFLAGS/-m*, the
-# cross CC/CXX, ...) cannot leak into the next build. WANT_DEBUG/VFLAG are
-# inherited, so --all --debug makes 4 debug zips.
+# Build every OS/arch combo in one shot: Linux x64/x86/arm64 and Windows
+# x64/x86 (no Windows on ARM). Each build runs in a subshell so its per-build
+# env exports (CFLAGS/-m*, the cross CC/CXX, ...) cannot leak into the next
+# build. WANT_DEBUG/VFLAG are inherited, so --all --debug makes 5 debug zips.
 build_all() {
-  ( WANT_I386=0; build_linux )   || die "Linux x64 build failed"
-  ( WANT_I386=1; build_linux )   || die "Linux x86 build failed"
-  ( WANT_I386=0; build_windows ) || die "Windows x64 build failed"
-  ( WANT_I386=1; build_windows ) || die "Windows x86 build failed"
-  printf "${GRE}All 4 builds complete!${c0}\n"
+  ( WANT_I386=0 WANT_ARM=0; build_linux )   || die "Linux x64 build failed"
+  ( WANT_I386=1 WANT_ARM=0; build_linux )   || die "Linux x86 build failed"
+  ( WANT_I386=0 WANT_ARM=1; build_linux )   || die "Linux arm64 build failed"
+  ( WANT_I386=0 WANT_ARM=0; build_windows ) || die "Windows x64 build failed"
+  ( WANT_I386=1 WANT_ARM=0; build_windows ) || die "Windows x86 build failed"
+  printf "${GRE}All 5 builds complete!${c0}\n"
 }
 
 while :; do
@@ -222,6 +243,9 @@ while :; do
         ;;
     --i386)
         WANT_I386=1
+        ;;
+    --arm)
+        WANT_ARM=1
         ;;
     --all)
         WANT_ALL=1
@@ -249,6 +273,12 @@ while :; do
   esac
   shift
 done
+
+# Validate --arm combos after parsing so flag order doesn't matter.
+if [ "$WANT_ARM" == "1" ]; then
+  [ "$WANT_TARGET" == "windows" ] && die "Windows on ARM is unsupported"
+  [ "$WANT_I386" == "1" ] && die "Cannot specify both --i386 and --arm"
+fi
 
 # --all overrides individual target/arch selection and builds every combo.
 if [ "$WANT_ALL" == "1" ]; then

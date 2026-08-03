@@ -273,7 +273,8 @@ configure_args = sys.argv[1:]
 if '--bootstrap' in configure_args:
     configure_args.remove('--bootstrap')
 n.variable('configure_args', ' '.join(configure_args))
-env_keys = set(['CXX', 'AR', 'WINDRES', 'CFLAGS', 'CXXFLAGS', 'LDFLAGS'])
+env_keys = set(['CXX', 'AR', 'WINDRES', 'CFLAGS', 'CXXFLAGS', 'LDFLAGS',
+                'SIMD_FLAGS'])
 configure_env = dict((k, os.environ[k]) for k in os.environ if k in env_keys)
 if configure_env:
     config_str = ' '.join([k + '=' + shlex.quote(configure_env[k])
@@ -375,10 +376,13 @@ else:
               '-fno-rtti',
               '-fno-exceptions',
               '-std=c++17',
-              '-mfpmath=sse',
-              '-msse2',
               '-fvisibility=hidden', '-pipe',
               '-DNINJA_PYTHON="%s"' % options.with_python]
+    # SIMD codegen flags. Default to x86 SSE2; builds for other ISAs override
+    # via the SIMD_FLAGS env var (e.g. -march=armv8-a+simd for arm64, whose
+    # gcc rejects -msse2/-mfpmath).
+    cflags += shlex.split(configure_env.get('SIMD_FLAGS',
+                                            '-mfpmath=sse -msse2'))
     if options.warnings_as_errors:
         cflags += [ "-Werror" ]
     if options.debug:
