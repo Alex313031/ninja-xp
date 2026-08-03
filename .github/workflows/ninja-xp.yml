@@ -34,10 +34,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install build dependencies
-        # g++-aarch64-linux-gnu is the cross toolchain for the Linux arm64 build.
+        # The unversioned gcc/g++-multilib metapackages declare Conflicts: with
+        # every cross gcc, so they can never coexist with g++-aarch64-linux-gnu
+        # (the arm64 cross toolchain). The versioned multilib package has no
+        # such conflict; all it lacks is the /usr/include/asm symlink that
+        # gcc-multilib ships, which the -m32 build needs to reach the kernel
+        # uapi headers (e.g. asm/errno.h) -- so create that by hand.
         run: |
           sudo apt update
-          sudo apt install -y build-essential gcc-multilib g++-multilib g++-aarch64-linux-gnu python3 re2c wget zip unzip
+          GXX_VER=$(apt-cache depends g++ | sed -n 's/.*Depends: g++-\([0-9][0-9]*\)$/\1/p' | head -n1)
+          sudo apt install -y build-essential "g++-${GXX_VER}-multilib" g++-aarch64-linux-gnu python3 re2c wget zip unzip
+          [ -e /usr/include/asm ] || sudo ln -s x86_64-linux-gnu/asm /usr/include/asm
 
       - name: Download MinGW
         # Use our own MinGW fork for compiling Windows builds

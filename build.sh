@@ -77,15 +77,26 @@ install_deps() {
   if [ "$(id -u)" -ne 0 ]; then sudo="sudo"; fi
 
   printf "${GRE}Installing dependencies for %s...${c0}\n" "$SCRIPTNAME"
-  # build-essential: gcc, g++, make for the Linux build; g++-multilib adds the
-  # 32-bit libs needed for --i386 Linux builds. mingw-w64 provides the
-  # *-w64-mingw32-* cross toolchains used by the Windows builds, and
-  # g++-aarch64-linux-gnu the aarch64 cross toolchain used by --arm builds.
+  # build-essential: gcc, g++, make for the Linux build. The unversioned
+  # gcc/g++-multilib metapackages declare Conflicts: with every cross gcc, so
+  # install the versioned multilib package (32-bit libs for --i386), which is
+  # co-installable with g++-aarch64-linux-gnu (the --arm cross toolchain).
+  # mingw-w64 provides the *-w64-mingw32-* cross toolchains for Windows builds.
   $sudo apt-get update || die "apt-get update failed"
-  $sudo apt-get install build-essential g++-multilib python3 re2c zip unzip \
+  local gxx_ver
+  gxx_ver=$(apt-cache depends g++ | sed -n 's/.*Depends: g++-\([0-9][0-9]*\)$/\1/p' | head -n1)
+  [ -n "$gxx_ver" ] || die "Could not determine the default g++ major version"
+  $sudo apt-get install build-essential "g++-${gxx_ver}-multilib" python3 re2c zip unzip \
         mingw-w64 mingw-w64-i686-dev mingw-w64-x86-64-dev mingw-w64-tools \
         g++-aarch64-linux-gnu \
       || die "Failed to install dependencies"
+  # gcc-multilib normally ships /usr/include/asm -> x86_64-linux-gnu/asm; the
+  # versioned multilib package does not, and -m32 builds need it to reach the
+  # kernel uapi headers (e.g. asm/errno.h).
+  if [ ! -e /usr/include/asm ] && [ -d /usr/include/x86_64-linux-gnu/asm ]; then
+    $sudo ln -s x86_64-linux-gnu/asm /usr/include/asm \
+      || die "Failed to create /usr/include/asm symlink"
+  fi
   printf "${GRE}Done installing dependencies!${c0}\n"
 }
 
