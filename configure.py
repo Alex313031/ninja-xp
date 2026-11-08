@@ -118,6 +118,35 @@ class Platform(object):
     def can_rebuild_in_place(self) -> bool:
         return not (self.is_windows() or self.is_aix())
 
+# ninja-xp: Windows baseline and PE subsystem version per mingw target arch.
+# Win32 XP is 0x0501/5.1, XP x64 and Server 2003 are 0x0502/5.2, and ARM64
+# Windows starts at Windows 10 (0x0A00/10.0) -- there is no XP on ARM.
+MINGW_WIN_TARGETS = {
+    'x86': ('0x0501', '5.1'),
+    'x64': ('0x0502', '5.2'),
+    'arm64': ('0x0A00', '10.0'),
+}
+
+def mingw_target_arch(cxx: str) -> str:
+    """Return 'x86', 'x64' or 'arm64' for the Windows arch `cxx` targets.
+
+    The mingw-w64 toolchains are per-target (i686-/x86_64-/aarch64-w64-mingw32)
+    and a cross build's host arch says nothing about the target, so ask the
+    compiler itself. Falls back to x86, the most conservative baseline, if the
+    compiler cannot be run.
+    """
+    try:
+        triple = subprocess.check_output([cxx, '-dumpmachine'],
+                                         stderr=subprocess.DEVNULL).decode().strip()
+    except (OSError, subprocess.CalledProcessError):
+        return 'x86'
+    machine = triple.split('-')[0].lower()
+    if machine in ('aarch64', 'arm64'):
+        return 'arm64'
+    if machine in ('x86_64', 'amd64'):
+        return 'x64'
+    return 'x86'
+
 class Bootstrap:
     """API shim for ninja_syntax.Writer that instead runs the commands.
 
@@ -400,9 +429,41 @@ else:
     except:
         pass
     if platform.is_mingw():
-        cflags += ['-DUNICODE', '-D_UNICODE', '-DWINVER=0x0501', '-D_WIN32_WINNT=0x0501',
-                   '-D_USING_V110_SDK71_', '-D_ATL_XP_TARGETING',
-                   '-DPSAPI_VERSION=1', '-D__USE_MINGW_ANSI_STDIO=1']
+        # ---- ninja-xp additions ------------------------------------------
+        # Everything ninja-xp changes or adds lives in this block; the
+        # upstream flag below is kept verbatim so future rebases only ever
+        # conflict here.
+        #
+        # Windows baseline, pinned per target arch. Upstream sets
+        # _WIN32_WINNT=0x0601 (Windows 7) for every mingw target and does not
+        # set WINVER at all; ninja-xp drops to the XP baseline on x86/x64 and
+        # keeps Windows 10 for arm64, which has no XP lineage at all (ARM64
+        # Windows starts at Windows 10). The matching PE subsystem version is
+        # stamped onto ldflags further down -- Win32 XP is 5.1, XP x64 /
+        # Server 2003 is 5.2, ARM64 is 10.0 -- because the linker otherwise
+        # emits its 5.02 default regardless of target.
+        mingw_arch = mingw_target_arch(CXX)
+        winver, subsystem_version = MINGW_WIN_TARGETS[mingw_arch]
+        cflags += ['-DWINVER=%s' % winver, '-D_WIN32_WINNT=%s' % winver]
+        # UNICODE/_UNICODE: select the wide-char Win32 API surface.
+        # PSAPI_VERSION=1: bind the Process Status API to psapi.dll instead of
+        # the K32* forwarders in kernel32, which only exist on Vista+.
+        cflags += ['-DUNICODE', '-D_UNICODE', '-DPSAPI_VERSION=1']
+        if mingw_arch == 'arm64':
+            # -Wno-attributes: __stdcall/WINAPI does not exist on AArch64 (it
+            # has a single calling convention), so GCC warns on every WINAPI
+            # declaration in subprocess-win32.cc, disk_interface.cc, util.cc
+            # and minidump-win32.cc. The attribute is correct and required for
+            # the x86/x64 targets, so silence the diagnostic here rather than
+            # dropping it from the sources.
+            cflags += ['-Wno-attributes']
+        else:
+            # _USING_V110_SDK71_ / _ATL_XP_TARGETING: opt into the
+            # XP-targeting mode of the Windows 7.1A SDK headers, which keeps
+            # the XP-era API surface available.
+            cflags += ['-D_USING_V110_SDK71_', '-D_ATL_XP_TARGETING']
+        # ---- end ninja-xp additions; upstream flag follows verbatim -------
+        cflags += ['-D__USE_MINGW_ANSI_STDIO=1']
     ldflags = ['-L$builddir']
     if platform.uses_usr_local():
         cflags.append('-I/usr/local/include')
@@ -418,6 +479,12 @@ libs = []
 if platform.is_mingw():
     cflags.remove('-fvisibility=hidden');
     ldflags.append('-static')
+    # ninja-xp: stamp the PE subsystem version matching the Windows baseline
+    # selected above. mingw's linker otherwise emits its 5.02 default for
+    # every target, which is wrong for both win32 (5.1) and arm64 (10.0).
+    subsystem_major, subsystem_minor = subsystem_version.split('.')
+    ldflags += ['-Wl,--major-subsystem-version=%s' % subsystem_major,
+                '-Wl,--minor-subsystem-version=%s' % subsystem_minor]
 elif platform.is_solaris():
     cflags.remove('-fvisibility=hidden')
 elif platform.is_aix():

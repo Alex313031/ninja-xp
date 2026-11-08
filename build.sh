@@ -20,7 +20,7 @@ die()  { yell "${RED}$* ${c0}"; exit 1; }
 try() { "$@" || die "${RED}Failed $*"; }
 
 SCRIPTNAME=$(basename "$0")
-SCRIPTVER="2.1.7"
+SCRIPTVER="2.1.8"
 
 export HERE=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
@@ -50,10 +50,13 @@ Options:
   -c, --clean   Remove build artifacts
   --deps        Install build dependencies
   --i386        Make a 32 bit build (i386 on Linux, win32 on Windows)
-  --arm         Cross compile a 64 bit ARM build (arm64, Linux only)
+  --arm         Cross compile a 64 bit ARM build: Linux arm64 by default,
+                or Windows on ARM with --win. Defaults to --linux if no
+                target is given
   -l, --linux   Build Ninja for Linux
   -w, --win     Build Ninja for Windows
-  --all         Build all 5 combos: Linux x64/x86/arm64 and Windows x64/x86
+  --all         Build all 6 combos: Linux x64/x86/arm64 and Windows
+                x64/x86/arm64
   -d, --debug   Make a debug build
   -v, --verbose Verbose build output
 
@@ -172,12 +175,29 @@ clean_out() {
 }
 
 build_windows() {
-  local zipname="" cross="" arch_label=""
+  local zipname="" cross="" arch_label="" win_simd_flags=""
   # Pick the cross toolchain prefix and artifact name by target arch. The
   # bootstrap ninja built below is a *native Linux* binary (it compiles POSIX
   # code like browse.cc's fork/pipe), so it MUST use the host g++ -- only the
-  # final mingw build uses $cross.
-  if [ "$WANT_I386" == "1" ]; then
+  # final mingw build uses $cross. For the same reason $win_simd_flags is
+  # applied to the final build only; armv8 flags would break the x86 host
+  # bootstrap.
+  if [ "$WANT_ARM" == "1" ]; then
+    # Windows on ARM. Unlike the x86/x64 targets this is not an XP-capable
+    # platform at all - ARM64 Windows starts at Windows 10 - so configure.py
+    # detects the target arch from the compiler and picks the Windows
+    # baseline, the PE subsystem version and -Wno-attributes to match.
+    # The distro mingw-w64 packages only ship i686/x86_64 targets, so --deps
+    # cannot provide this one; it comes from the mingw-build release zips.
+    command -v aarch64-w64-mingw32-gcc >/dev/null || \
+      die "aarch64-w64-mingw32-gcc not found. Unzip mingw_gcc_linux_arm64.zip from\n       https://github.com/Alex313031/mingw-build/releases and add its bin/ to PATH"
+    cross="aarch64-w64-mingw32"
+    zipname="ninja_win_arm64"
+    arch_label="arm64"
+    # configure.py's SIMD default (-mfpmath=sse -msse2) is x86-only; use the
+    # NEON baseline instead.
+    win_simd_flags="-march=armv8-a+simd"
+  elif [ "$WANT_I386" == "1" ]; then
     cross="i686-w64-mingw32"
     zipname="ninja_win32"
     arch_label="x86"
@@ -197,6 +217,7 @@ build_windows() {
     # Cross-compile for Windows. configure.py defaults the mingw toolchain to
     # plain g++/ar (the host compiler), so point it at the cross compiler.
     export CC="$cross-gcc" CXX="$cross-g++" AR="$cross-ar" LD="$cross-g++" WINDRES="$cross-windres"
+    [ -n "$win_simd_flags" ] && export SIMD_FLAGS="$win_simd_flags"
     try python3 configure.py --host=linux --platform=mingw --debug $VFLAG
     try ./ninja_bootstrap -j"$JOB_COUNT"
     try mv -fv ninja.exe ninja_debug.exe
@@ -211,6 +232,7 @@ build_windows() {
     try mv -fv ninja ninja_bootstrap
     printf "${CYA}Making final build...${c0}\n"
     export CC="$cross-gcc" CXX="$cross-g++" AR="$cross-ar" LD="$cross-g++" WINDRES="$cross-windres"
+    [ -n "$win_simd_flags" ] && export SIMD_FLAGS="$win_simd_flags"
     try python3 configure.py --host=linux --platform=mingw $VFLAG
     try ./ninja_bootstrap -j"$JOB_COUNT"
     printf "${GRE}Zipping up ninja.exe... ${c0}\n"
@@ -221,16 +243,17 @@ build_windows() {
 }
 
 # Build every OS/arch combo in one shot: Linux x64/x86/arm64 and Windows
-# x64/x86 (no Windows on ARM). Each build runs in a subshell so its per-build
-# env exports (CFLAGS/-m*, the cross CC/CXX, ...) cannot leak into the next
-# build. WANT_DEBUG/VFLAG are inherited, so --all --debug makes 5 debug zips.
+# x64/x86/arm64. Each build runs in a subshell so its per-build env exports
+# (CFLAGS/-m*, SIMD_FLAGS, the cross CC/CXX, ...) cannot leak into the next
+# build. WANT_DEBUG/VFLAG are inherited, so --all --debug makes 6 debug zips.
 build_all() {
   ( WANT_I386=0 WANT_ARM=0; build_linux )   || die "Linux x64 build failed"
   ( WANT_I386=1 WANT_ARM=0; build_linux )   || die "Linux x86 build failed"
   ( WANT_I386=0 WANT_ARM=1; build_linux )   || die "Linux arm64 build failed"
   ( WANT_I386=0 WANT_ARM=0; build_windows ) || die "Windows x64 build failed"
   ( WANT_I386=1 WANT_ARM=0; build_windows ) || die "Windows x86 build failed"
-  printf "${GRE}All 5 builds complete!${c0}\n"
+  ( WANT_I386=0 WANT_ARM=1; build_windows ) || die "Windows arm64 build failed"
+  printf "${GRE}All 6 builds complete!${c0}\n"
 }
 
 while :; do
@@ -285,10 +308,12 @@ while :; do
   shift
 done
 
-# Validate --arm combos after parsing so flag order doesn't matter.
+# Validate --arm combos after parsing so flag order doesn't matter. --arm now
+# selects the arm64 variant of whichever target was asked for: Linux arm64 by
+# default, or Windows on ARM with --win.
 if [ "$WANT_ARM" == "1" ]; then
-  [ "$WANT_TARGET" == "windows" ] && die "Windows on ARM is unsupported"
   [ "$WANT_I386" == "1" ] && die "Cannot specify both --i386 and --arm"
+  [ "$WANT_ALL" == "1" ] && die "--all already builds both arm64 targets; drop --arm"
 fi
 
 # --all overrides individual target/arch selection and builds every combo.
